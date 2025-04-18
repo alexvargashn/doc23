@@ -1,32 +1,43 @@
 {
-    "root_name": "document_structure",
-    "description_field": "content",
+    "root_name": "MyDocument",
+    "description_field": "description",
     "sections_field": "sections",
     "levels": {
-        "h1": {
-            "pattern": "^# (.+)",
-            "title_field": "main_title",
-            "description_field": "summary",
-            "sections_field": "subsections"
+        "book": {
+            "pattern": "^(LIBRO|LBRO)\\s+[^\\n]+",
+            "name": "book",
+            "title_field": "title",
+            "description_field": "description",
+            "sections_field": "sections",
+            "paragraph_field": null,
+            "parent": null
         },
-        "h2": {
-            "pattern": "^## (.+)",
-            "title_field": "section_title",
-            "description_field": "section_content",
-            "parent": "h1",
-            "sections_field": "subsections"
+        "title": {
+            "pattern": "^TITULO\\s+[^\\n]+",
+            "name": "title",
+            "title_field": "title",
+            "description_field": "description",
+            "sections_field": "sections",
+            "paragraph_field": "article",
+            "parent": "book"
         },
-        "h3": {
-            "pattern": "^### (.+)",
-            "title_field": "subsection_title",
-            "description_field": "subsection_content",
-            "parent": "h2"
+        "chapter": {
+            "pattern": "^CAPITULO\\s+[^\\n]+",
+            "name": "chapter",
+            "title_field": "title",
+            "description_field": "description",
+            "sections_field": "sections",
+            "paragraph_field": "article",
+            "parent": "title"
         },
-        "list": {
-            "pattern": "^- (.+)",
-            "title_field": "list_item",
-            "description_field": "details",
-            "parent": "h2"
+        "article": {
+            "pattern": "^(ARTICULO\\s+\\d+(?:-?[A-Za-z])?)\\.\\s*(.+)",
+            "name": "article",
+            "title_field": "title",
+            "description_field": null,
+            "sections_field": null,
+            "paragraph_field": "content",
+            "parent": null
         }
     }
 }

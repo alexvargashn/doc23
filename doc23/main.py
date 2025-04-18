@@ -7,10 +7,10 @@ import mimetypes
 from pathlib import Path
 import re
 import shutil
-from typing import IO, BinaryIO, Union
+from typing import IO, Any, BinaryIO, Dict, Optional, Union
 import zipfile
 from docx import Document
-import magic
+import magic as python_magic
 from pdf2image import convert_from_bytes
 import pdfplumber
 import docx2txt
@@ -25,7 +25,8 @@ from odf.draw import Image
 import markdown
 
 from doc23.allowed_types import AllowedTypes
-from doc23.config_tree import Config
+from doc23.config_tree import Config, LevelConfig
+from doc23.gardener import Gardener
 
 
 class Doc23:
@@ -37,7 +38,7 @@ class Doc23:
 
         Args:
             file (Union[str, Path, IO[bytes]]): The file to be parsed.
-            config (Config): The patterns to be found, the structure of the output, and the fields to be used.
+            config (Config): The patterns to be found, the structure of the output and the fields to be used.
         """
         self._file = file
         self._config = config
@@ -47,7 +48,7 @@ class Doc23:
         """Extract text from the file
 
         Args:
-            scan_or_image (str | bool, optional): The file contains image or is scanned_. Defaults to False.
+            scan_or_image (str | bool, optional): The file contains image or is scanned. Defaults to False.
 
         Raises:
             ValueError: If the file is not any of the ALLOWED_TYPES, return an error unsupported document type.
@@ -79,82 +80,28 @@ class Doc23:
             case _:
                 raise ValueError(f"Unsupported document type: {doc_type}")
 
-    def prune(self, config: Config = None, text: str = None):
-        config = config or self._config
-        text = text or self.extract_text()
+    def prune(self, config: Config = None, text:str = None) -> Dict[str, Any]: 
+        """
+        Parses the text and returns a nested dictionary structure.
+        
+        This version replicates the "classic" article insertion logic: 
+        If   an 'article' is detected                                : 
+          1) If there's a current chapter, attach it there.
+          2) Else if there's a current title, attach it there.
+          3) Else if there's a current book, attach it there.
+          4) Otherwise, attach at root.
+        """
+        config = self._config
+        text   = self.extract_text()
 
-        if config is None:
-            raise ValueError("Config object is required to prune the doc")
-        if not text.strip():
-            raise ValueError("Text is required to prune the doc")
-
-        structure = {
-            self._config["root_name"]: {
-                self._config["sections_field"]: [],  # Ensure sections exist at the root
-                self._config["description_field"]: "",
-            }
-        }
-        stack = [(structure, None)]  # Stack of levels
-        current_article = None
-
-        for line in text.splitlines():
-            line = line.strip()
-            if not line:
-                continue
-
-            for level, details in self._config["levels"].items():
-                match = re.match(details["pattern"], line)
-                if match:
-                    # Create a new section with custom names
-                    new_section = {
-                        details["title_field"]: match.group(0),
-                        details["description_field"]: "",
-                        details.get("sections_field", "sections"): [],
-                    }
-                    if "paragraph_field" in details:
-                        new_section[details["paragraph_field"]] = []
-
-                    # Find which level must to be inserted the current section
-                    while stack and stack[-1][1] not in (None, details.get("parent")):
-                        stack.pop()  # Back through the hierarchy until found where to fit
-
-                    parent, _ = stack[-1]
-
-                    sections_field = self._config.get("sections_field", "sections")
-
-                    if sections_field not in parent:
-                        parent[sections_field] = []  # Ensure the sections list exists
-
-                    parent[sections_field].append(new_section)
-
-                    stack.append((new_section, level))
-
-                    if "paragraph_field" in details:
-                        current_article = new_section
-                    else:
-                        current_article = None
-                    break
-            else:
-                # If not a new section fit like content
-                if current_article:
-                    current_article[self._config["description_field"]] += " " + line
-                elif stack[-1][0]:
-                    description_field = self._config.get("description_field", "content")
-
-                    if description_field not in stack[-1][0]:
-                        stack[-1][0][
-                            description_field
-                        ] = ""  # Ensure the key exists before appending
-
-                    stack[-1][0][description_field] += " " + line
-
-        return structure
-
+        gardener = Gardener(config)
+        return gardener.prune(text)
+        
     def pdf_contain_text(self) -> bool:
         """Check if the PDF file contains text.
 
         Returns:
-            bool: True if the PDF file contains text, False otherwise.
+        bool   : True if the PDF file contains text, False otherwise.
         """
         with pdfplumber.open(
             str(self._file) if isinstance(self._file, Path) else self._file
@@ -480,8 +427,8 @@ class Doc23:
             str: The type of the document.
         """
         # Check the document type if the file is an IO memory object
-        mime = magic.Magic(mime=True)
-        if isinstance(self._file, IO):
+        mime = python_magic.Magic(mime=True)
+        if isinstance(self._file, BytesIO):
             doc_type = mime.from_buffer(self._file.read(2048))
             self._file.seek(0)
             return doc_type
@@ -493,7 +440,6 @@ class Doc23:
         ext_type = mimetypes.guess_type(file_path)[0]
         real_type = mime.from_file(str(file_path))
         _type = ext_type or real_type
-        print(_type)
         return _type
 
     def available_tesseract(self) -> bool:
@@ -504,5 +450,289 @@ class Doc23:
         """
         return shutil.which("tesseract") is not None
 
+    def parse_legal_document(text): 
+        # Expresiones regulares para identificar secciones
+        book_pattern = r"^(LIBRO|LBRO)\s+[^\n]+"
+        title_pattern = r"^TITULO\s+[^\n]+"
+        chapter_pattern = r"^CAPITULO\s+[^\n]+"
+        article_pattern = r"^ARTICULO\s+(\d+-?[A-Z]?)\.\s*(.+)"
 
-obj = Doc23("doc23.py", Config())
+        # Estructura principal
+        structure = {"title": "", "description": "", "sections": []}
+        current_book = None
+        current_title = None
+        current_chapter = None
+        current_article = None
+
+        for line in text.split("\n"):
+            line = line.strip()
+
+            # Detectar libros
+            book_match = re.match(book_pattern, line)
+            if book_match:
+                current_book = {
+                    "title": book_match.group(0),
+                    "description": "",
+                    "sections": [],
+                    "articles": [],
+                }
+                structure["sections"].append(current_book)
+                current_title = None
+                current_chapter = None
+                current_article = None
+                continue
+            # Solver in the general algorithm
+            # Detectar títulos
+            title_match = re.match(title_pattern, line)
+            if title_match and current_book:
+                current_title = {
+                    "title": title_match.group(0),
+                    "description": "",
+                    "sections": [],
+                    "articles": [],
+                }
+                current_book["sections"].append(current_title)
+                current_chapter = None
+                current_article = None
+                continue
+
+            # Detectar capítulos
+            chapter_match = re.match(chapter_pattern, line)
+            if chapter_match and current_title:
+                current_chapter = {
+                    "title": chapter_match.group(0),
+                    "description": "",
+                    "articles": [],
+                }
+                current_title["sections"].append(current_chapter)
+                current_article = None
+                continue
+
+            # Detectar artículos (con sufijos opcionales)
+            article_match = re.match(article_pattern, line)
+            if article_match:
+                article = {
+                    "title": f"ARTICULO {article_match.group(1)}",
+                    "content": article_match.group(
+                        2
+                    ),  # Captura todo el contenido inicial del artículo
+                }
+
+                # Si hay un capítulo actual, agregar el artículo dentro de él
+                if current_chapter: 
+                    current_chapter["articles"].append(article)
+                # Si no hay un capítulo, el artículo pertenece directamente al título
+                elif current_title:
+                    current_title["articles"].append(article)
+
+                current_article = (
+                    article  # Mantener referencia para agregar contenido adicional
+                )
+                continue
+
+            # Si encontramos contenido adicional para el artículo actual
+            if current_article:
+                current_article["content"] += (
+                    " " + line
+                )  # Agregar contenido adicional al artículo
+            elif current_chapter:
+                current_chapter["description"] += " " + line
+            elif current_title:
+                current_title["description"] += " " + line
+            elif current_book:
+                current_book["description"] += " " + line
+            else:
+                structure["description"] += " " + line
+
+        return structure
+
+
+    def prune2(self) -> Dict[str, Any]: 
+        """
+        Parses the text and returns a nested dictionary structure.
+        
+        This version replicates the "classic" article insertion logic:
+        If an 'article' is detected:
+          1) If there's a current chapter, attach it there.
+          2) Else if there's a current title, attach it there.
+          3) Else if there's a current book, attach it there.
+          4) Otherwise, attach at root.
+        """
+        config = self._config
+        text = self._text
+
+        # Root structure
+        root: Dict[str, Any] = {
+            "name": config.root_name,
+            config.sections_field: [],
+            config.description_field: ""
+        }
+
+        # Dictionary to track the most recent node for each level key
+        # e.g., current_nodes["title"] = {...}, current_nodes["chapter"] = {...}
+        current_nodes: Dict[str, Dict[str, Any]] = {}
+
+        def get_depth(level_key: str) -> int:
+            """
+            Computes how many parents up the chain exist for this level key.
+            A root level has parent=None => depth=0.
+            """
+            depth = 0
+            parent_key = config.levels[level_key].parent
+            while parent_key is not None:
+                depth += 1
+                parent_key = config.levels[parent_key].parent
+            return depth
+
+        level_keys_sorted = sorted(config.levels.keys(), key=get_depth)
+
+        def create_node(level_key: str, match_obj: re.Match) -> Dict[str, Any]:
+            """
+            Creates a dictionary node for a matched level.
+            
+            Generic approach for capturing groups:
+              - If no groups, node[level_cfg.title_field] = group(0).
+              - If 1 group, node[level_cfg.title_field] = group(1).
+              - If 2 or more groups, first group => title, remainder => joined for paragraph_field.
+            """
+            level_cfg = config.levels[level_key]
+            node: Dict[str, Any] = {}
+
+            groups = match_obj.groups()
+            if not groups:
+                title_value = match_obj.group(0)
+                paragraph_value = ""
+            elif len(groups) == 1:
+                title_value = groups[0]
+                paragraph_value = ""
+            else:
+                title_value = groups[0]
+                leftover = groups[1:]
+                paragraph_value = " ".join(leftover)
+
+            node[level_cfg.title_field] = title_value
+
+            if level_cfg.description_field is not None:
+                node[level_cfg.description_field] = ""
+
+            if level_cfg.sections_field is not None:
+                node[level_cfg.sections_field] = []
+
+            if level_cfg.articles_field is not None:
+                node[level_cfg.articles_field] = []
+
+            if level_cfg.paragraph_field is not None:
+                node[level_cfg.paragraph_field] = paragraph_value
+
+            return node
+
+        # Helper to insert a node under a parent's sections or articles
+        def insert_node(parent_node: Dict[str, Any], parent_cfg: LevelConfig, child_node: Dict[str, Any], child_key: str):
+            """
+            Inserts 'child_node' either into parent's articles_field or sections_field,
+            depending on the child's config, or parent's config, or a custom logic.
+            """
+            child_cfg = config.levels[child_key]
+
+            # If the child's config has a paragraph_field (usually an article)
+            # AND the parent has articles_field, we insert in articles.
+            # Otherwise, we insert in sections.
+            if parent_cfg.articles_field and child_cfg.paragraph_field and not child_cfg.sections_field:
+                parent_node[parent_cfg.articles_field].append(child_node)
+            else:
+                if parent_cfg.sections_field:
+                    parent_node[parent_cfg.sections_field].append(child_node)
+                else:
+                    # If the parent doesn't define sections_field, we fallback to root sections.
+                    root[config.sections_field].append(child_node)
+
+        # Process each line
+        for line in text.split("\n"):
+            line = line.strip()
+            if not line:
+                continue
+
+            matched_key = None
+            match_obj = None
+
+            # Try matching from deeper levels to shallower
+            for level_key in reversed(level_keys_sorted):
+                pattern = config.levels[level_key].pattern
+                mo = re.match(pattern, line)
+                if mo:
+                    matched_key = level_key
+                    match_obj = mo
+                    break
+
+            if matched_key and match_obj:
+                new_node = create_node(matched_key, match_obj)
+
+                # If this is not the "article" level, we do the usual "find_parent_node"
+                # But if it *is* the article level, we replicate the "classic" fallback logic.
+                if matched_key == "article":
+                    # 1) If there's a current 'chapter', attach there
+                    if "chapter" in current_nodes:
+                        parent_cfg = config.levels["chapter"]
+                        parent_node = current_nodes["chapter"]
+                        insert_node(parent_node, parent_cfg, new_node, matched_key)
+                    # 2) else if there's a current 'title', attach there
+                    elif "title" in current_nodes:
+                        parent_cfg = config.levels["title"]
+                        parent_node = current_nodes["title"]
+                        insert_node(parent_node, parent_cfg, new_node, matched_key)
+                    # 3) else if there's a current 'book', attach there
+                    elif "book" in current_nodes:
+                        parent_cfg = config.levels["book"]
+                        parent_node = current_nodes["book"]
+                        insert_node(parent_node, parent_cfg, new_node, matched_key)
+                    else:
+                        # 4) fallback => root
+                        root[config.sections_field].append(new_node)
+                else:
+                    # Normal path for book, title, chapter, etc.
+                    parent_key = config.levels[matched_key].parent
+                    if parent_key is None:
+                        # Root level
+                        root[config.sections_field].append(new_node)
+                    else:
+                        parent_node = current_nodes.get(parent_key, root)
+                        parent_cfg = config.levels[parent_key]
+                        insert_node(parent_node, parent_cfg, new_node, matched_key)
+
+                # Update current node for matched level
+                current_nodes[matched_key] = new_node
+
+            else:
+                # No pattern matched => treat as additional text
+                if current_nodes:
+                    # Find the deepest active node
+                    deepest_key = max(current_nodes.keys(), key=get_depth)
+                    deepest_cfg = config.levels[deepest_key]
+                    node = current_nodes[deepest_key]
+
+                    if deepest_cfg.paragraph_field:
+                        node[deepest_cfg.paragraph_field] += " " + line
+                    elif deepest_cfg.description_field:
+                        node[deepest_cfg.description_field] += " " + line
+                    else:
+                        # ascend parents
+                        placed = False
+                        parent_key = deepest_cfg.parent
+                        while parent_key and not placed:
+                            p_cfg = config.levels[parent_key]
+                            p_node = current_nodes.get(parent_key)
+                            if p_node:
+                                if p_cfg.paragraph_field:
+                                    p_node[p_cfg.paragraph_field] += " " + line
+                                    placed = True
+                                elif p_cfg.description_field:
+                                    p_node[p_cfg.description_field] += " " + line
+                                    placed = True
+                            parent_key = p_cfg.parent if p_cfg else None
+
+                        if not placed:
+                            root[config.description_field] += " " + line
+                else:
+                    root[config.description_field] += " " + line
+
+        return root
