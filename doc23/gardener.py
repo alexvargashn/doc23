@@ -47,16 +47,30 @@ class Gardener:
                     for child_level in self._shears.levels.values():
                         if child_level.parent == level.name:
                             current_level[child_level.name] = None
+                            
 
                     ## TODO: Add the minor level to the actual hierarchy
                     if level.name == minor_level:
                         minor_level_found = current_level[level.name]
-                        for level in self._shears.levels.values():
-                            if current_level[level.name] is not None and \
-                                level.paragraph_field is not None and \
-                                level.paragraph_field == minor_level and \
-                                level.name != minor_level:
-                                current_level[level.name][level.paragraph_field].append(minor_level_found)
+                        for parent_level in self._shears.levels.values():
+                            # Only add articles to non-chapter levels if they don't have a chapter parent
+                            if current_level[parent_level.name] is not None and \
+                                parent_level.paragraph_field is not None and \
+                                parent_level.name != minor_level:
+                                
+                                # Check if this article belongs to a chapter (has immediate parent)
+                                has_immediate_parent = False
+                                for immediate_parent in self._shears.levels.values():
+                                    if immediate_parent.name != parent_level.name and \
+                                       immediate_parent.parent == parent_level.name and \
+                                       current_level[immediate_parent.name] is not None:
+                                        has_immediate_parent = True
+                                        break
+                                
+                                # Only add to paragraph field if it doesn't have an immediate parent (chapter)
+                                # or if the current level is the immediate parent
+                                if not has_immediate_parent or parent_level.name == level.parent:
+                                    current_level[parent_level.name][parent_level.paragraph_field].append(minor_level_found)
                     continue
                  
                 
