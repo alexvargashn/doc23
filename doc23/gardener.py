@@ -71,7 +71,7 @@ class Gardener:
                                 # or if the current level is the immediate parent
                                 if not has_immediate_parent or parent_level.name == level.parent:
                                     current_level[parent_level.name][parent_level.paragraph_field].append(minor_level_found)
-                    continue
+                        continue
                  
                 
         return structure
@@ -89,23 +89,39 @@ class Gardener:
             Dict[str, Any]: A dictionary containing all the fields defined in the level configuration
         """
         level_dict = {}
+        minor_level = self.get_minor_level()
+
+        description = ""
+        content = ""
+        
+        if not match.groups():
+            # If no groups, use the entire match as title
+            title = match.group(0)
+        else:
+            # First group is always the title
+            title = match.group(1)
+            
+            # If we have a second group, use it for description and content
+            if len(match.groups()) == 2 and match.group(2) is not None:
+                description = match.group(2)
+                content = match.group(2)
+        
+        level_dict["type"] = level.name
         
         # Handle title field
         if level.title_field:
-            level_dict[level.title_field] = match.group(0)
+            level_dict[level.title_field] = title
             
         # Handle description field if present
         if level.description_field is not None:
-            level_dict[level.description_field] = ""
+            level_dict[level.description_field] = description
 
         # Handle paragraph field if present
         if level.paragraph_field is not None:
-            # If there are capture groups, use them for the paragraph content
-            # if match.groups():
-            #     level_dict[level.paragraph_field] = match.group(1) if len(match.groups()) == 1 else " ".join(match.groups()[1:])
-            # else:
-            #     level_dict[level.paragraph_field] = ""
-            level_dict[level.paragraph_field] = []
+            if level.name == minor_level:
+                level_dict[level.paragraph_field] = content if content else []
+            else:
+                level_dict[level.paragraph_field] = [content] if content else []
             
         # Handle sections field if present
         if level.sections_field is not None:
