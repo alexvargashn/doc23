@@ -1,191 +1,135 @@
 import re
+from typing import Dict, Any, List, Tuple
 from doc23.config_tree import Config, LevelConfig
-from typing import Dict, Any, List
 
 
-class Gardener: 
-    """Class responsible for pruning and structuring document content based on configuration.
-    
-    This class takes a Config object (shears) and uses it to parse and structure
-    document content into a hierarchical tree based on the defined levels.
+class Gardener:
+    """
+    Converts plain text (`bush`) into a dictionary tree according to `Config`.
+    Supports having the lowest level (e.g. ARTICLE) hang from any other level.
     """
 
-    def __init__(self, shears: Config): 
-        """Initialize the Gardener with configuration.
-        
-        Args:
-            shears: Configuration object defining how to structure the document
-        """
-        self._shears = shears
+    # ------------------------------------------------------------------ #
+    #  Construction
+    # ------------------------------------------------------------------ #
+    def __init__(self, shears: Config):
+        self.cfg = shears
 
-    def prune(self, bush: str) -> dict: 
-        
-        structure = {
-            "title": "",
-            "description": "",
-            "sections": []
+        # 1) Compile patterns once
+        self.patterns: dict[str, re.Pattern] = {
+            name: re.compile(lvl.pattern, re.MULTILINE)
+            for name, lvl in self.cfg.levels.items()
         }
 
-        current_level = { level.name: None for level in self._shears.levels.values() }
-        max_father_level = self.get_max_father_level()
-        minor_level = self.get_minor_level()
-        
-        for line in bush.splitlines():
-            line = line.strip()
+        # 2) Hierarchical rank according to the order in Config
+        self.rank: dict[str, int] = {
+            name: idx for idx, name in enumerate(self.cfg.levels.keys())
+        }
 
-            for level in self._shears.levels.values():
-                match = re.match(level.pattern, line)
-                if match:
-                    current_level[level.name] = self.build_level(level, match)
+        # 3) Leaf level (the one that is never a parent)
+        self.leaf = self._infer_leaf()
 
-                    if level.name == max_father_level:
-                        structure["sections"].append(current_level[level.name])
+    # ------------------------------------------------------------------ #
+    #  Main API
+    # ------------------------------------------------------------------ #
+    def prune(self, bush: str) -> Dict[str, Any]:
+        root: Dict[str, Any] = {"title": "", "description": "", "sections": []}
+        stack: List[Tuple[str, Dict[str, Any]]] = []          # [(level_name, node)]
 
-                    if level.parent is not None:
-                        current_level[level.parent]["sections"].append(current_level[level.name])
-                    
-                    for child_level in self._shears.levels.values():
-                        if child_level.parent == level.name:
-                            current_level[child_level.name] = None
-                            
+        for raw in bush.splitlines():
+            line = raw.strip()
+            if not line:
+                continue
 
-                    ## TODO: Add the minor level to the actual hierarchy
-                    if level.name == minor_level:
-                        minor_level_found = current_level[level.name]
-                        for parent_level in self._shears.levels.values():
-                            # Only add articles to non-chapter levels if they don't have a chapter parent
-                            if current_level[parent_level.name] is not None and \
-                                parent_level.paragraph_field is not None and \
-                                parent_level.name != minor_level:
-                                
-                                # Check if this article belongs to a chapter (has immediate parent)
-                                has_immediate_parent = False
-                                for immediate_parent in self._shears.levels.values():
-                                    if immediate_parent.name != parent_level.name and \
-                                       immediate_parent.parent == parent_level.name and \
-                                       current_level[immediate_parent.name] is not None:
-                                        has_immediate_parent = True
-                                        break
-                                
-                                # Only add to paragraph field if it doesn't have an immediate parent (chapter)
-                                # or if the current level is the immediate parent
-                                if not has_immediate_parent or parent_level.name == level.parent:
-                                    current_level[parent_level.name][parent_level.paragraph_field].append(minor_level_found)
-                        continue
-                 
-                
-        return structure
-                
+            # 1. Does the line open a new level?
+            level_name, match = self._match_level(line)
+            if level_name:
+                lvl_cfg = self.cfg.levels[level_name]
 
+                # A. Pop until its rank is greater than the top
+                while stack and self.rank[stack[-1][0]] >= self.rank[level_name]:
+                    stack.pop()
 
-    def build_level(self, level: LevelConfig, match: re.Match) -> Dict[str, Any]:
-        """Build a level structure based on the level configuration and match object.
-        
-        Args:
-            level: The LevelConfig object defining the level structure
-            match: The regex match object containing the matched content
-            
-        Returns:
-            Dict[str, Any]: A dictionary containing all the fields defined in the level configuration
-        """
-        level_dict = {}
-        minor_level = self.get_minor_level()
+                # B. Create node
+                node = self._build_node(lvl_cfg, match)
 
-        description = ""
-        content = ""
-        
-        if not match.groups():
-            # If no groups, use the entire match as title
-            title = match.group(0)
-        else:
-            # First group is always the title
-            title = match.group(1)
-            
-            # If we have a second group, use it for description and content
-            if len(match.groups()) == 2 and match.group(2) is not None:
-                description = match.group(2)
-                content = match.group(2)
-        
-        level_dict["type"] = level.name
-        
-        # Handle title field
-        if level.title_field:
-            level_dict[level.title_field] = title
-            
-        # Handle description field if present
-        if level.description_field is not None:
-            level_dict[level.description_field] = description
+                # C. Insert into the appropriate parent
+                if stack:
+                    parent_name, parent_node = stack[-1]
+                    parent_cfg = self.cfg.levels[parent_name]
 
-        # Handle paragraph field if present
-        if level.paragraph_field is not None:
-            if level.name == minor_level:
-                level_dict[level.paragraph_field] = content if content else []
+                    if level_name == self.leaf and parent_cfg.paragraph_field:
+                        # The child is a leaf → goes to the paragraph_field of the parent
+                        parent_node[parent_cfg.paragraph_field].append(node)
+                    else:
+                        sections = parent_cfg.sections_field or "sections"
+                        parent_node[sections].append(node)
+                else:
+                    root["sections"].append(node)
+
+                # D. Keep the node open
+                stack.append((level_name, node))
+                continue  # line processed, next line
+
+            # 2. Free text → to the top node (if it exists)
+            if stack:
+                top_name, top_node = stack[-1]
+                top_cfg = self.cfg.levels[top_name]
+
+                if top_name == self.leaf and top_cfg.paragraph_field:
+                    top_node[top_cfg.paragraph_field].append(line)
+                elif top_cfg.description_field:
+                    sep = " " if top_node[top_cfg.description_field] else ""
+                    top_node[top_cfg.description_field] += sep + line
             else:
-                level_dict[level.paragraph_field] = [content] if content else []
-            
-        # Handle sections field if present
-        if level.sections_field is not None:
-            level_dict[level.sections_field] = []
+                sep = " " if root["description"] else ""
+                root["description"] += sep + line
 
-        
-            
-        return level_dict
-            
-    def get_max_father_level(self) -> str:
-        """Get the name of the highest level in the hierarchy.
-        
-        This method finds the level that:
-        1. Has no parent (parent is None)
-        2. Has the most descendants in the hierarchy
-        
-        Returns:
-            str: The name of the highest level in the hierarchy, or None if no levels exist
+        return root
+
+    # ------------------------------------------------------------------ #
+    #  Helpers
+    # ------------------------------------------------------------------ #
+    def _match_level(self, line: str) -> Tuple[str | None, re.Match | None]:
         """
-        def count_descendants(level_name: str) -> int:
-            count = 0
-            for level in self._shears.levels.values():
-                if level.parent == level_name:
-                    count += 1 + count_descendants(level.name)
-            return count
-
-        # First, get all levels that have no parent
-        root_levels = [name for name, level in self._shears.levels.items() if level.parent is None]
-        
-        if not root_levels:
-            return None
-            
-        # Count descendants for each root level
-        root_with_most_descendants = max(
-            root_levels,
-            key=lambda name: count_descendants(name)
-        )
-        
-        return root_with_most_descendants
-
-    def get_minor_level(self) -> str:
-        """Get the name of the lowest level in the hierarchy.
-        
-        This method finds the level that:
-        1. Has no children (no other levels have it as their parent)
-        
-        Returns:
-            str: The name of the lowest level in the hierarchy, or None if no levels exist
+        Tries to match the line with a level pattern.
+        Returns (level_name, match) or (None, None).
+        Evaluates in hierarchical order (root → leaf) to prioritize high levels.
         """
-        # Get all level names
-        all_levels = set(self._shears.levels.keys())
-        
-        # Get all parent levels (levels that are parents of other levels)
-        parent_levels = set()
-        for level in self._shears.levels.values():
-            if level.parent is not None:
-                parent_levels.add(level.parent)
-        
-        # The lowest level is one that is not a parent of any other level
-        lowest_levels = all_levels - parent_levels
-        
-        if not lowest_levels:
-            return None
-            
-        # If there are multiple lowest levels, return the first one
-        return next(iter(lowest_levels))
-            
+        for name in self.rank:                 # order defined in Config
+            m = self.patterns[name].match(line)
+            if m:
+                return name, m
+        return None, None
+
+    def _build_node(self, lvl: LevelConfig, m: re.Match) -> Dict[str, Any]:
+        """
+        Builds a dict for a node of level `lvl` from the match `m`.
+        """
+        node: Dict[str, Any] = {"type": lvl.name}
+
+        groups = m.groups()
+        title = groups[0] if groups else m.group(0)
+        tail = groups[1] if len(groups) > 1 else ""
+
+        if lvl.title_field:
+            node[lvl.title_field] = title
+
+        if lvl.description_field is not None:
+            node[lvl.description_field] = tail.strip()
+
+        if lvl.paragraph_field is not None:
+            # For the leaf we use a list of paragraphs or nodes (flexible)
+            initial = [tail.strip()] if tail else []
+            node[lvl.paragraph_field] = initial
+
+        if lvl.sections_field is not None:
+            node[lvl.sections_field] = []
+
+        return node
+
+    def _infer_leaf(self) -> str | None:
+        """Returns the name of the level that is not a parent of any other."""
+        parents = {lvl.parent for lvl in self.cfg.levels.values() if lvl.parent}
+        leaves = set(self.cfg.levels) - parents
+        return next(iter(leaves), None)
