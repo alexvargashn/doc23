@@ -60,26 +60,48 @@ WEB_DEPS = [
     'websockets==15.0',
 ]
 
+with open("README.md", "r", encoding="utf-8") as fh:
+    long_description = fh.read()
+
 setup(
-    name                          = "doc23",
-    version                       = "0.1.0",
-    packages                      = find_packages(),
-    install_requires              = RUNTIME_DEPS,
-    extras_require               = {
-        'dev': DEV_DEPS,
-        'web': WEB_DEPS,
-        'all': RUNTIME_DEPS + DEV_DEPS + WEB_DEPS,
-    },
-    author                        = "Alex Vargas",
-    author_email                  = "alexv7142@gmail.com",
-    description                   = "A python library to extract text from documents like pdf, docx, odt, md, rtf and images and formatting the output to a JSON dinamic tree provided by the user.",
-    long_description              = open("README.md").read(),
-    long_description_content_type = "text/markdown",
-    url                           = "https://github.com/alexvargashn/doc23",
-    classifiers                   = [
+    name="doc23",
+    version="0.2.0",
+    author="Alex Dev",
+    author_email="example@example.com",
+    description="Extract text from documents and convert it into a structured JSON tree",
+    long_description=long_description,
+    long_description_content_type="text/markdown",
+    url="https://github.com/yourusername/doc23",
+    packages=find_packages(),
+    classifiers=[
         "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.10",
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
+        "Topic :: Text Processing :: Markup",
+        "Topic :: Office/Business",
     ],
-    python_requires = '>=3',
+    python_requires=">=3.10",
+    install_requires=[
+        "python-magic",
+        "pdfplumber",
+        "pdf2image",
+        "pytesseract",
+        "python-docx",
+        "docx2txt",
+        "Pillow",
+        "striprtf",
+        "odfpy",
+        "markdown",
+        "typing-extensions",
+    ],
+    extras_require={
+        "dev": [
+            "pytest",
+            "pytest-cov",
+            "mypy",
+            "flake8",
+            "black",
+        ],
+    },
 )
