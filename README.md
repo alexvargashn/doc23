@@ -1,162 +1,250 @@
-# doc23
+# 📚 doc23
 
-A Python library for extracting text from documents and converting it into a structured JSON tree.
+**Convert documents into structured JSON effortlessly.**  
+A Python library for extracting text from various document formats and structuring it hierarchically into JSON.
 
-## Features
+---
 
-- Extract text from various document formats (PDF, DOCX, TXT, RTF, ODT, MD, etc.)
-- OCR support for scanned documents and images
-- Flexible configuration for defining document structure
-- Hierarchical parsing of document content
+## 📌 Features
 
-## Installation
+- ✅ Extract text from PDFs, DOCX, TXT, RTF, ODT, MD, and images.
+- 🖼️ OCR support for scanned documents and images.
+- ⚙️ Flexible configuration using regex patterns and field mapping.
+- 🌳 Nested hierarchical structure output in JSON.
+- ✨ Explicit leaf-level control using `is_leaf=True`.
+- 🔍 Built-in validations to catch config mistakes (regex, hierarchy, field conflicts).
+- 🧪 Unittest support for robust validation.
+
+---
+
+## 📦 Installation
 
 ```bash
 pip install doc23
 ```
 
-### Dependencies
+To enable OCR:
+```bash
+sudo apt install tesseract-ocr
+pip install pytesseract
+```
 
-- Python 3.10+
-- For OCR functionality:
-  - Tesseract OCR (system installation required)
-  - pytesseract package
+---
 
-## Basic Usage
+## 🚀 Quickstart Example
+
+Parse a simple text file with structure:
+
+```
+CHAPTER I
+Laying Plans
+
+1. Sun Tzu said: The art of war is of vital importance to the State.
+2. It is a matter of life and death, a road either to safety or to ruin.
+```
 
 ```python
 from doc23 import Doc23, Config, LevelConfig
 
-# Define your document structure
 config = Config(
-    root_name="document",
-    sections_field="sections",
+    root_name="art_of_war",
+    sections_field="chapters",
     description_field="description",
     levels={
-        "book": LevelConfig(
-            pattern=r"^BOOK\s+(.+)$",
-            name="book",
-            title_field="title",
-            description_field="description",
-            sections_field="sections"
-        ),
         "chapter": LevelConfig(
-            pattern=r"^CHAPTER\s+(.+)$",
+            pattern=r"^CHAPTER\s+([IVXLCDM]+)\n(.+)$",
             name="chapter",
             title_field="title",
             description_field="description",
-            sections_field="sections",
-            parent="book"
+            sections_field="paragraphs"
         ),
-        "article": LevelConfig(
-            pattern=r"^ARTICLE\s+(\d+)\.\s*(.*)$",
-            name="article",
-            title_field="title",
-            description_field="content",
-            paragraph_field="paragraphs",
-            parent="chapter"
+        "paragraph": LevelConfig(
+            pattern=r"^(\d+)\.\s+(.+)$",
+            name="paragraph",
+            title_field="number",
+            description_field="text",
+            is_leaf=True
         )
     }
 )
 
-# Process a document
-doc = Doc23("my_document.pdf", config)
+with open("art_of_war.txt") as f:
+    text = f.read()
+
+doc = Doc23(text, config)
 structure = doc.prune()
 
-# Use the structured content
-print(structure["sections"][0]["title"])  # First book title
+print(structure["chapters"][0]["title"])  # → I
 ```
 
-## Advanced Usage
+---
 
-### OCR for Scanned Documents
+## 🧾 Output Example
 
-```python
-# Enable OCR for scanned documents
-doc = Doc23("scanned_document.pdf", config)
-structure = doc.prune(text=doc.extract_text(scan_or_image=True))
-
-# Or let the library detect if OCR is needed
-structure = doc.prune(text=doc.extract_text(scan_or_image="auto"))
-```
-
-### Custom Logging
-
-```python
-from doc23 import configure_logging
-import logging
-
-# Configure logging to file with debug level
-configure_logging(
-    level=logging.DEBUG,
-    log_file="doc23.log"
-)
-
-# Continue with normal usage
-doc = Doc23("my_document.pdf", config)
-```
-
-## Document Structure Definition
-
-The document structure is defined using `Config` and `LevelConfig` objects:
-
-- `Config`: Defines the overall structure and contains multiple level configurations
-- `LevelConfig`: Defines how to recognize and structure a specific level in the document
-
-Example configuration for a legal document:
-
-```python
-config = Config(
-    root_name="legal_document",
-    sections_field="sections",
-    description_field="description",
-    levels={
-        "title": LevelConfig(
-            pattern=r"^TITLE\s+([^\n]+)$",
-            name="title",
-            title_field="title",
-            description_field="description",
-            sections_field="chapters"
-        ),
-        "chapter": LevelConfig(
-            pattern=r"^CHAPTER\s+([^\n]+)$",
-            name="chapter",
-            title_field="title",
-            description_field="description",
-            sections_field="articles",
-            parent="title"
-        ),
-        "article": LevelConfig(
-            pattern=r"^ARTICLE\s+(\d+(?:-\w)?)\.\s*(.+)?$",
-            name="article",
-            title_field="number",
-            description_field="content",
-            paragraph_field="paragraphs",
-            parent="chapter"
-        )
+```json
+{
+  "description": "",
+  "chapters": [
+    {
+      "type": "chapter",
+      "title": "I",
+      "description": "Laying Plans",
+      "paragraphs": [
+        {
+          "type": "paragraph",
+          "number": "1",
+          "text": "Sun Tzu said: The art of war is of vital importance to the State."
+        }
+      ]
     }
-)
+  ]
+}
 ```
 
-## Error Handling
+---
 
-The library provides specific exception classes for better error handling:
+## 🛠️ Document Configuration
+
+Use `Config` and `LevelConfig` to define how your document is parsed:
+
+| Field | Purpose |
+|-------|---------|
+| `pattern` | Regex to match each level |
+| `title_field` | Field to assign the first regex group |
+| `description_field` | (Optional) Field for second group |
+| `sections_field` | (Optional) Where sublevels go |
+| `paragraph_field` | (Optional) Where text/nodes go if leaf |
+| `is_leaf` | (Optional) Forces this level to be terminal |
+
+### Capture Group Rules
+
+| Fields Defined | Required Groups in Regex |
+|----------------|--------------------------|
+| `title_field` only | ≥1 |
+| `title_field + description/paragraph` | ≥1 (second group optional) |
+
+---
+
+## 🏗️ Architecture Overview
+
+doc23 consists of several key components:
+
+```
+Doc23 (core.py)
+├── Extractors (extractors/)
+│   ├── PDFExtractor
+│   ├── DocxExtractor
+│   ├── TextExtractor
+│   └── ...
+├── Config (config_tree.py)
+│   └── LevelConfig
+└── Gardener (gardener.py)
+```
+
+1. **Doc23**: Main entry point, handles file detection and orchestration
+2. **Extractors**: Convert various document types to plain text
+3. **Config**: Defines how to structure the document hierarchy
+4. **Gardener**: Parses text and builds the JSON structure
+
+---
+
+## ✅ Built-in Validation
+
+The library validates your config when creating `Doc23`:
+
+- ✋ Ensures all parents exist.
+- 🔁 Detects circular relationships.
+- ⚠️ Checks field name reuse.
+- 🧪 Verifies group counts match pattern.
+
+If any issue is found, a `ValueError` will be raised immediately.
+
+---
+
+## 🧪 Minimal Test
 
 ```python
-from doc23 import Doc23, Config, Doc23Error, FileTypeError, ExtractionError
-
-try:
-    doc = Doc23("document.pdf", config)
-    structure = doc.prune()
-except FileTypeError as e:
-    print(f"Unsupported file type: {e}")
-except ExtractionError as e:
-    print(f"Text extraction failed: {e}")
-except Doc23Error as e:
-    print(f"General error: {e}")
+def test_doc23_parsing():
+    config = Config(
+        root_name="demo",
+        sections_field="chapters",
+        description_field="description",
+        levels={
+            "chapter": LevelConfig(
+                pattern=r"^CHAPTER\s+([IVXLCDM]+)\n(.+)$",
+                name="chapter",
+                title_field="title",
+                description_field="description",
+                sections_field="paragraphs"
+            ),
+            "paragraph": LevelConfig(
+                pattern=r"^(\d+)\.\s+(.+)$",
+                name="paragraph",
+                title_field="number",
+                description_field="text",
+                is_leaf=True
+            )
+        }
+    )
+    gardener = Gardener(config)
+    output = gardener.prune("CHAPTER I\nIntro\n\n1. Hello World")
+    assert output["chapters"][0]["paragraphs"][0]["text"] == "Hello World"
 ```
 
-## License
+---
+
+## ❓ Troubleshooting FAQ
+
+### OCR not working
+Make sure Tesseract is installed and accessible in your PATH.
+
+### Text extraction issues
+Different document formats may require specific libraries. Check your dependencies:
+- PDF: pdfplumber, pdf2image
+- DOCX: docx2txt
+- ODT: odf
+
+### Regex pattern not matching
+Test your patterns with tools like [regex101.com](https://regex101.com) and ensure you have the correct number of capture groups.
+
+---
+
+## 🔄 Compatibility
+
+- Python 3.8+
+- Tested on Linux, macOS, and Windows
+
+---
+
+## 👥 Contributing
+
+Contributions are welcome! Please follow these steps:
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+---
+
+## 📄 License
 
 MIT
 
+---
+
+## 🔗 Resources
+
+- [Project Gutenberg – Public Domain Texts](https://www.gutenberg.org)
+- [Tesseract OCR Wiki](https://github.com/tesseract-ocr/tesseract/wiki)
+- [GitHub Repository](https://github.com/alexvargashn/doc23)
+
+
+---
+
+## 🧠 Advanced Usage
+
+For advanced patterns, dynamic configs, exception handling and OCR examples, see:
+
+📄 [ADVANCED_USAGE_doc23.md](ADVANCED_USAGE_doc23.md)

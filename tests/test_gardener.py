@@ -94,15 +94,15 @@ Another article"""
     assert book["description"] == "This is a description"
     
     # Check articles
-    assert "paragraphs" in book
-    assert len(book["paragraphs"]) == 2
+    assert "sections" in book
+    assert len(book["sections"]) == 2
     
-    article1 = book["paragraphs"][0]
+    article1 = book["sections"][0]
     assert article1["title"] == "1"
     assert article1["content"] == "First article"
     assert article1["paragraphs"] == ["This is article content", "More content"]
     
-    article2 = book["paragraphs"][1]
+    article2 = book["sections"][1]
     assert article2["title"] == "2"
     assert article2["content"] == "Second article"
     assert article2["paragraphs"] == ["Another article"]

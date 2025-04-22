@@ -18,6 +18,16 @@ class BaseExtractor(ABC):
     implement the extract_text method.
     """
     
+    def __init__(self, file_obj: Union[str, Path, BytesIO, BinaryIO]):
+        """
+        Initialize the base extractor with a file object.
+        
+        Args:
+            file_obj: The document file object, which can be a path string,
+                      Path object, or a file-like object.
+        """
+        self.file_obj = self._validate_file_object(file_obj)
+    
     @abstractmethod
     def extract_text(
         self, 

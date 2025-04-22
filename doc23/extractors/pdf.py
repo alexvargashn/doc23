@@ -22,22 +22,14 @@ class PDFExtractor(BaseExtractor):
     Extractor for PDF files that handles text extraction and OCR when needed.
     """
     
-    def __init__(self, ocr_language: str = 'eng'):
+    def __init__(
+        self, 
+        file_obj: Union[str, Path, BytesIO, BinaryIO],
+        scan_or_image: Union[bool, str] = False,
+        ocr_language: str = 'eng'
+    ):
         """
         Initialize PDF extractor.
-        
-        Args:
-            ocr_language: The language to use for OCR, default is English ('eng').
-        """
-        self.ocr_language = ocr_language
-        
-    def extract_text(
-        self, 
-        file_obj: Union[str, Path, BytesIO, BinaryIO], 
-        scan_or_image: Union[bool, str] = False
-    ) -> str:
-        """
-        Extract text from a PDF file.
         
         Args:
             file_obj: The PDF file object, which can be a path string,
@@ -46,7 +38,24 @@ class PDFExtractor(BaseExtractor):
                           - False: Only extract text (no OCR)
                           - True: Use OCR on all pages
                           - 'auto': Detect and use OCR only when needed
-                           
+            ocr_language: The language to use for OCR, default is English ('eng').
+        """
+        super().__init__(file_obj)
+        self.scan_or_image = scan_or_image
+        self.ocr_language = ocr_language
+        
+    def extract_text(
+        self, 
+        file_obj: Optional[Union[str, Path, BytesIO, BinaryIO]] = None,
+        scan_or_image: Optional[Union[bool, str]] = None
+    ) -> str:
+        """
+        Extract text from a PDF file.
+        
+        Args:
+            file_obj: Optional file object to override the one provided at initialization.
+            scan_or_image: Optional scan_or_image setting to override the one provided at initialization.
+            
         Returns:
             Extracted text as a string.
             
@@ -54,15 +63,17 @@ class PDFExtractor(BaseExtractor):
             ExtractionError: If text extraction fails.
         """
         try:
-            validated_file = self._validate_file_object(file_obj)
+            # Use instance values if parameters are not provided
+            file_to_use = file_obj if file_obj is not None else self.file_obj
+            scan_to_use = scan_or_image if scan_or_image is not None else self.scan_or_image
             
-            match scan_or_image:
+            match scan_to_use:
                 case False:
-                    return self._extract_text_only(validated_file)
+                    return self._extract_text_only(file_to_use)
                 case True:
-                    return self._extract_with_ocr(validated_file)
+                    return self._extract_with_ocr(file_to_use)
                 case "auto":
-                    return self._extract_auto(validated_file)
+                    return self._extract_auto(file_to_use)
                 case _:
                     raise ExtractionError(
                         "scan_or_image must be a boolean or 'auto'"

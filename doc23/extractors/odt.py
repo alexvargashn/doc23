@@ -7,7 +7,7 @@ import os
 import tempfile
 from io import BytesIO
 from pathlib import Path
-from typing import BinaryIO, Union
+from typing import BinaryIO, Union, Optional
 
 from odf.opendocument import load
 from odf.text import P
@@ -24,28 +24,37 @@ class ODTExtractor(BaseExtractor):
     Extractor for ODT (OpenDocument Text) files.
     """
     
-    def __init__(self, ocr_language: str = 'eng'):
+    def __init__(
+        self, 
+        file_obj: Union[str, Path, BytesIO, BinaryIO],
+        scan_or_image: Union[bool, str] = False,
+        ocr_language: str = 'eng'
+    ):
         """
         Initialize ODT extractor.
-        
-        Args:
-            ocr_language: The language to use for OCR if needed, default is English ('eng').
-        """
-        self.ocr_language = ocr_language
-        
-    def extract_text(
-        self, 
-        file_obj: Union[str, Path, BytesIO, BinaryIO], 
-        scan_or_image: Union[bool, str] = False
-    ) -> str:
-        """
-        Extract text from an ODT file.
         
         Args:
             file_obj: The ODT file object, which can be a path string,
                       Path object, or a file-like object.
             scan_or_image: How to handle potential images in the document (not fully implemented).
-                           
+            ocr_language: The language to use for OCR if needed, default is English ('eng').
+        """
+        super().__init__(file_obj)
+        self.scan_or_image = scan_or_image
+        self.ocr_language = ocr_language
+        
+    def extract_text(
+        self, 
+        file_obj: Optional[Union[str, Path, BytesIO, BinaryIO]] = None,
+        scan_or_image: Optional[Union[bool, str]] = None
+    ) -> str:
+        """
+        Extract text from an ODT file.
+        
+        Args:
+            file_obj: Optional file object to override the one provided at initialization.
+            scan_or_image: Optional scan_or_image setting to override the one provided at initialization.
+            
         Returns:
             Extracted text as a string.
             
@@ -53,17 +62,19 @@ class ODTExtractor(BaseExtractor):
             ExtractionError: If text extraction fails.
         """
         try:
-            validated_file = self._validate_file_object(file_obj)
+            # Use instance values if parameters are not provided
+            file_to_use = file_obj if file_obj is not None else self.file_obj
+            scan_to_use = scan_or_image if scan_or_image is not None else self.scan_or_image
             
             # Handle file paths
-            if isinstance(validated_file, str):
-                return self._extract_from_odt(validated_file)
+            if isinstance(file_to_use, str):
+                return self._extract_from_odt(file_to_use)
             
             # Handle file-like objects by saving to a temporary file
             with tempfile.NamedTemporaryFile(suffix='.odt', delete=False) as temp_file:
                 temp_path = temp_file.name
-                validated_file.seek(0)
-                temp_file.write(validated_file.read())
+                file_to_use.seek(0)
+                temp_file.write(file_to_use.read())
             
             try:
                 return self._extract_from_odt(temp_path)
