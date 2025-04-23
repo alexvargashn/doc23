@@ -16,3 +16,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Built-in validations for config mistakes
 - Comprehensive test suite
 - Advanced usage documentation 
+
+## [0.1.1] - 2024-04-25
+
+### Changed
+- Improved project description and metadata for PyPI.
+- Added `project.urls` (Source, Docs, Issue Tracker) to `pyproject.toml`.
+- Added `keywords` and additional `classifiers` for better PyPI discoverability.
+- Updated long description with a clearer overview and purpose.
+- No changes to code or functionality.
