@@ -4,13 +4,21 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "doc23"
-version = "0.1.0"
-description = "Tool to extract an ordered text structure from documents"
+version = "0.1.1"
+description = "Powerful Python library to convert documents (PDF, DOCX, TXT) into structured JSON trees for legal, institutional, and NLP applications."
 readme = "README.md"
 license = {text = "MIT"}
 authors = [{ name="Alex Vargas" }]
 requires-python = ">=3.10"
-keywords = ["text-extraction", "document-parsing", "regex", "structure", "JSON"]
+keywords = ["document parsing", "legaltech", "NLP", "PDF to JSON", "text extraction", "structure", "OCR", "AI"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: Text Processing",
+    "Intended Audience :: Developers",
+    "Development Status :: 3 - Alpha"
+]
 dependencies = [
     "annotated-types==0.7.0",
     "anyio==4.8.0",
@@ -43,5 +51,7 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/alexvargashn/doc23"
-Repository = "https://github.com/alexvargashn/doc23"
+"Homepage" = "https://github.com/alexvargashn/doc23"
+"Documentation" = "https://github.com/alexvargashn/doc23#readme"
+"Source" = "https://github.com/alexvargashn/doc23"
+"Bug Tracker" = "https://github.com/alexvargashn/doc23/issues"
