@@ -1,8 +1,7 @@
 """
 Core functionality of the doc23 library.
 
-This module contains the main Doc23 class, which is the primary interface
-for working with documents.
+This module contains the main Doc23 class and utility functions for working with documents.
 """
 
 import logging
@@ -28,6 +27,31 @@ from doc23.gardener import Gardener
 
 
 logger = logging.getLogger(__name__)
+
+
+def extract_text(file: Union[str, Path, bytes, BytesIO], scan_or_image: Union[bool, str] = False) -> str:
+    """
+    Extract raw text from a file.
+    
+    This function detects the file type and uses the appropriate extractor to
+    extract the text content. For scanned documents or images, OCR can be used.
+    
+    Args:
+        file: Path to the file or file-like object
+        scan_or_image: Controls OCR behavior:
+            - False (default): No OCR, extract text directly
+            - True: Force OCR on all pages
+            - 'auto': Automatically detect if OCR is needed
+            
+    Returns:
+        str: The extracted text content
+        
+    Raises:
+        ExtractionError: If text extraction fails for any reason
+        FileTypeError: If the file type is not supported
+    """
+    doc = Doc23(file, Config("temp", "sections", "description", {}))
+    return doc._extract_text(scan_or_image)
 
 
 class Doc23:
@@ -70,6 +94,10 @@ class Doc23:
             ExtractionError: If text extraction fails for any reason
             FileTypeError: If the file type is not supported
         """
+        return self._extract_text(scan_or_image)
+
+    def _extract_text(self, scan_or_image: Union[bool, str]) -> str:
+        """Internal method for text extraction."""
         extractor = self._get_extractor(scan_or_image)
         try:
             return extractor.extract_text(scan_or_image=scan_or_image)

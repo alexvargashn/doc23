@@ -13,7 +13,7 @@ A Python library for extracting text from various document formats and structuri
 - 🌳 Nested hierarchical structure output in JSON.
 - ✨ Explicit leaf-level control using `is_leaf=True`.
 - 🔍 Built-in validations to catch config mistakes (regex, hierarchy, field conflicts).
-- 🧪 Unittest support for robust validation.
+- 🧪 Comprehensive pytest suite with coverage reporting.
 
 ---
 
@@ -33,16 +33,16 @@ pip install pytesseract
 
 ## 🚀 Quickstart Example
 
-Parse a simple text file with structure:
+### Basic Text Extraction
+```python
+from doc23 import extract_text
 
+# Extract text from any supported document
+text = extract_text("document.pdf", scan_or_image="auto")
+print(text)
 ```
-CHAPTER I
-Laying Plans
 
-1. Sun Tzu said: The art of war is of vital importance to the State.
-2. It is a matter of life and death, a road either to safety or to ruin.
-```
-
+### Structured Document Parsing
 ```python
 from doc23 import Doc23, Config, LevelConfig
 
@@ -121,7 +121,8 @@ Use `Config` and `LevelConfig` to define how your document is parsed:
 | Fields Defined | Required Groups in Regex |
 |----------------|--------------------------|
 | `title_field` only | ≥1 |
-| `title_field + description/paragraph` | ≥1 (second group optional) |
+| `title_field` + `description_field` | ≥2 |
+| `title_field` + `paragraph_field` | ≥1 (second group optional) |
 
 ---
 
