@@ -161,34 +161,117 @@ If any issue is found, a `ValueError` will be raised immediately.
 
 ---
 
-## 🧪 Minimal Test
+## 🧪 Testing
 
+The library includes a comprehensive test suite covering various scenarios:
+
+### Basic Initialization
 ```python
-def test_doc23_parsing():
+def test_gardener_initialization():
     config = Config(
-        root_name="demo",
-        sections_field="chapters",
+        root_name="document",
+        sections_field="sections",
         description_field="description",
         levels={
-            "chapter": LevelConfig(
-                pattern=r"^CHAPTER\s+([IVXLCDM]+)\n(.+)$",
-                name="chapter",
+            "book": LevelConfig(
+                pattern=r"^BOOK\s+(.+)$",
+                name="book",
                 title_field="title",
                 description_field="description",
-                sections_field="paragraphs"
+                sections_field="sections"
             ),
-            "paragraph": LevelConfig(
-                pattern=r"^(\d+)\.\s+(.+)$",
-                name="paragraph",
-                title_field="number",
-                description_field="text",
-                is_leaf=True
+            "article": LevelConfig(
+                pattern=r"^ARTICLE\s+(\d+)\.\s*(.*)$",
+                name="article",
+                title_field="title",
+                description_field="content",
+                paragraph_field="paragraphs",
+                parent="book"
             )
         }
     )
     gardener = Gardener(config)
-    output = gardener.prune("CHAPTER I\nIntro\n\n1. Hello World")
-    assert output["chapters"][0]["paragraphs"][0]["text"] == "Hello World"
+    assert gardener.leaf == "article"
+```
+
+### Document Structure
+```python
+def test_prune_basic_structure():
+    config = Config(
+        root_name="document",
+        sections_field="sections",
+        description_field="description",
+        levels={
+            "book": LevelConfig(
+                pattern=r"^BOOK\s+(.+)$",
+                name="book",
+                title_field="title",
+                description_field="description",
+                sections_field="sections"
+            ),
+            "article": LevelConfig(
+                pattern=r"^ARTICLE\s+(\d+)\.\s*(.*)$",
+                name="article",
+                title_field="title",
+                description_field="content",
+                paragraph_field="paragraphs",
+                parent="book"
+            )
+        }
+    )
+    gardener = Gardener(config)
+    text = """BOOK First Book
+This is a description
+ARTICLE 1. First article
+This is article content
+More content"""
+    result = gardener.prune(text)
+    assert result["sections"][0]["title"] == "First Book"
+    assert result["sections"][0]["sections"][0]["paragraphs"] == ["This is article content", "More content"]
+```
+
+### Edge Cases
+```python
+def test_prune_empty_document():
+    config = Config(
+        root_name="document",
+        sections_field="sections",
+        description_field="description",
+        levels={}
+    )
+    gardener = Gardener(config)
+    result = gardener.prune("")
+    assert result["sections"] == []
+```
+
+### Free Text Handling
+```python
+def test_prune_with_free_text():
+    config = Config(
+        root_name="document",
+        sections_field="sections",
+        description_field="description",
+        levels={
+            "title": LevelConfig(
+                pattern=r"^TITLE\s+(.+)$",
+                name="title",
+                title_field="title",
+                description_field="description",
+                sections_field="sections"
+            )
+        }
+    )
+    gardener = Gardener(config)
+    text = """This is free text at the top level
+TITLE First Title
+Title description"""
+    result = gardener.prune(text)
+    assert result["description"] == "This is free text at the top level"
+```
+
+Run tests with:
+```bash
+python -m pytest tests/
 ```
 
 ---
