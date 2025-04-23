@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="./assets/doc23-banner-tree.png" alt="doc23 banner" width="400" height="300" style="border-radius: 20px;" />
+</p>
+
 # 📚 doc23
 
 **Convert documents into structured JSON effortlessly.**  
