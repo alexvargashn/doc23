@@ -25,3 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `keywords` and additional `classifiers` for better PyPI discoverability.
 - Updated long description with a clearer overview and purpose.
 - No changes to code or functionality.
+
+## [0.1.2] - 2024-04-26
+
+### Changed
+- Updated dependency version ranges in pyproject.toml to prevent potential compatibility issues
+- Improved dependency management with more flexible version constraints
+- No breaking changes to the API or functionality
